@@ -35,7 +35,7 @@ function output = std_median(input)
 output = sqrt( sum( power( abs(input - median(input,'omitnan')),2 )) / (length(input)-1) );
 end
 
-function pixel_distance = calculate_degree(degree)
-global SCREEN
-pixel_distance = tand(degree) * SCREEN.view_distance / SCREEN.screenWidth_real * SCREEN.screenWidth;
-end
+% function pixel_distance = calculate_degree(degree)
+% global SCREEN
+% pixel_distance = tand(degree) * SCREEN.view_distance / SCREEN.screenWidth_real * SCREEN.screenWidth;
+% end
