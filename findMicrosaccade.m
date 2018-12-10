@@ -15,7 +15,7 @@ sac_term = find(diff(index) == -1);
 if length(sac_on) >= length(sac_term)
     for i = 1:length(sac_term)
         if (sac_term(i) - sac_on(find(sac_on < sac_term(i),1,'last'))) * dt > 10
-            if nansum(eyedata(sac_on(find(sac_on < sac_term(i),1,'last')):sac_term(i),2))/1000 < calculate_degree(max_degree)
+            if nansum(eyedata(sac_on(find(sac_on < sac_term(i),1,'last')):sac_term(i),2))/1000 < max_degree
                 saccade_index = cat(1,saccade_index,[sac_on(find(sac_on < sac_term(i),1,'last')) sac_term(i)]);
             end
         end
@@ -23,7 +23,7 @@ if length(sac_on) >= length(sac_term)
 elseif length(sac_on) < length(sac_term)
     for i = 1 : length(sac_on)
         if (sac_term(find(sac_term > sac_on(i),1))) * dt > 10
-            if nansum(eyedata(sac_on(i):sac_term(find(sac_term > sac_on(i),1)),2))/1000 < calculate_degree(max_degree)
+            if nansum(eyedata(sac_on(i):sac_term(find(sac_term > sac_on(i),1)),2))/1000 < max_degree
                 saccade_index = cat(1,saccade_index,[sac_on(i) sac_term(find(sac_term > sac_on(i),1))]);
             end
         end
