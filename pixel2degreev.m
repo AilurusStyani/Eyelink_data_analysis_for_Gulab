@@ -46,42 +46,42 @@ if ~exist('clo_t','var') || isempty(col_t); col_t = 1; end
 if ~exist('clo_x','var') || isempty(clo_x); col_x = 2; end
 if ~exist('clo_y','var') || isempty(clo_y); col_y = 3; end
 
-dt = mode(eyedata(:,col_t));
+dt = ( mode(eyedata(2:end,col_t) - eyedata(1:end-1,col_t)) ) ./ 1000; % ms to s
 index_length = length(eyedata(:,1));
 
-if index_length <= 4
+if index_length <= 6
     error('Input data are too short or you may need to transpose the matrix.')
 end
 
-index_p = zeros(index_length,2);
+index_p = zeros(size(eyedata,1),2);
 
-for i = 1 : index_length
-    if i == 1
-        index_p(i,:) = [eyedata(1,col_x) eyedata(1,col_y)];
-    elseif i == 2
-        index_p(i,:) = [eyedata(1,col_x) eyedata(1,col_y)] + [eyedata(3,col_x) eyedata(3,col_y)] - 2 * [eyedata(2,col_x) eyedata(2,col_y)];
-    elseif i < index_length - 2
-        index_p(i,:) = [eyedata(i+2,col_x) eyedata(i+2,col_y)] + [eyedata(i-2,col_x) eyedata(i-2,col_y)] - 2 * [eyedata(i,col_x) eyedata(i,col_y)];
-    elseif i == index_length - 1
-        index_p(i,:) = [eyedata(i+1,col_x) eyedata(i+1,col_y)] + [eyedata(i-1,col_x) eyedata(i-1,col_y)] - 2 * [eyedata(i,col_x) eyedata(i,col_y)];
-    elseif i == index_length
-        index_p(i,:) = [eyedata(index_length,col_x) eyedata(index_length,col_y)];
+for i = 1 : size(eyedata,1)
+    if i == 1 || i == size(eyedata,1)
+        index_p(i,:) = 0;
+    elseif i == 2 || i == size(eyedata,1) - 1
+        index_p(i,:) = (eyedata(i+1,2:3) - eyedata(i-1,2:3)) / 2;
+    elseif i == 3 || i == size(eyedata,1) - 2
+        index_p(i,:) = (eyedata(i+2,2:3) + eyedata(i+1,2:3) - eyedata(i-1,2:3) - eyedata(i-2,2:3)) / 6;
+    elseif i == 4 || i == size(eyedata,1) - 3
+        index_p(i,:) = (eyedata(i+3,2:3) + eyedata(i+2,2:3) + eyedata(i+1,2:3) - eyedata(i-1,2:3) - eyedata(i-2,2:3) - eyedata(i-3,2:3)) / 12;
+    else
+        index_p(i,:) = (eyedata(i+4,2:3) + eyedata(i+3,2:3) + eyedata(i+2,2:3) + eyedata(i+1,2:3) - eyedata(i-1,2:3) - eyedata(i-2,2:3) - eyedata(i-3,2:3) - eyedata(i-4,2:3)) / 20;
     end
 end
 
-% convert x-y in pixel to x-y in real distance 
+% convert velocity unit in x-y pixel to x-y in real distance 
 index_cm = [index_p(:,1) ./ screen_wp .* screen_w , index_p(:,2) ./ screen_hp .* screen_h];
 
 % convert x-y distance to vector distance
-index_vd = sqrt(power(index_cm(:,1),2) + power(index_cm(:,2),2));
+index_v = sqrt(power(index_cm(:,1),2) + power(index_cm(:,2),2)) ./ view_dis;
 
-% convert to velocity as degree/time
-index_v = atand(index_vd) ./ dt;
+% convert to velocity in degree
+index_vd = atand(index_v) /dt;
 
 [~,col_num] = size(eyedata);
 unchanged_col = 1:col_num;
 unchanged_col([col_t col_x col_y]) = [];
 
-degree_data = [eyedata(:,1) , index_v, eyedata(:,unchanged_col)];
+degree_data = [eyedata(:,1) , index_vd, eyedata(:,unchanged_col)];
 end
     
