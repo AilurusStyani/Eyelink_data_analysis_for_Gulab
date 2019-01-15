@@ -1,47 +1,30 @@
-function main
-% First edition BY BYC at 2018/10/16
-%
-% meaning of error flags:
-% 0. no eye blink;
-% 1. small pupil size, the experiments may not operated in a strict 
-%     darkness room;
-% 2. eye closeing in end;
-% 3. eye closeing in recording begining;
-% 4. sudden increase / decrease;
-% 5. at least one peak within/just before/soon after the eye blink;
-% 6. not firmly closeing in eye blink or just squinting;
-% 7. A long time with eye closing (1/5);
-% 8. have a minimum of pupil size & blink detected;
-% 9. still have unknow rifts in x and y pixel, that should be caused
-%     by not regorous operation or other unknown conditions.
-% 10.Still lots of points outside the screen. It may be caused by 
-%     no correctly calibration & validation, or may be the subject squinting for too long (>1s)
-% 11.Still have unknown noisy point (sudden decrease to zero for ~1
-%     to 20ms, discontinuously), this maybe caused by Eyelink.
-%
-% BY BYC SEP/2018
-%
-% Last updated at 2018/11/16 by BYC
 
+function main
+% By BYC at 2018/10/08
 close all
-% clear all
+clear all
 warning off
 
-data_path = ''; % the path for candidate data
-exeFilePath = ''; % the path for exe file 'edf2asc.exe'
-fileSaveName = 'sample_';
+file_path = 'D:\ION\2018_rotation\CJW\data0105\heading';
+subject{1} = 'CJW';
+subject{2} = 'YZX';
+subject{3} = 'PPY';
+subject{4} = 'DQS';
 
-error_set = [7 8 9 10]; % for more detail, please read BlinkNoisePurify_NaN.m
-maxtrialNUM = 500; % the maximum trial numbers in all blocks
-smooth_Hz = 60; % the aim value for data smooth / low pass
-fixation_degree = 3; % fixation degree
-saccade_thres = 30; % degree/s, 30 as example
-saccade_thres_cap = 100; % degree/s, 100 as example
-% microsaccade_thres = 5; % times of S.D as threshold.
-pupil_baseline_duration = 200; % ms; the duration of time for calculating base line for pupil size before the period of stimulus onset.
+no_choice_version = 0; % 1 for no choice version; other number for choise version
+error_set = [7 8 9 10 12]; % for more detail, please read BlinkNoisePurify_NaN.m
+maxtrialNUM = 400; % the maximum trial numbers in all blocks
+fixation_degree = 3; % degree measure as an angle ( not radian ), the data outside are invalide as NaN
+saccade_thres = 3; % degree/s
+saccade_thres_cap = 100; % degree/s
+micro_rate_bin_width = 50; % ms
+micro_rate_step_length = 5; % ms
 
-skip_files_convert = 1; % 0: need do converting; 1: skip files conversion. if EDF files have already been converted, set 1 to saving your time
-skip_eyedata_collect = 1; % 0: need do converting; 1: skip eye data collection. if eye data have already been converted, set 1 to saving your time
+edf2asc = 1; % 0:convert data from EDF files to asc files; 1: skip this process;
+data_convert = 1; % 0:convert data to mat files; 1: skip this process;
+
+exeFilePath = 'D:\ION\2018_rotation\CJW\analyses\edf2asc'; % Where you put the 'edf2asc.exe'
+fileSaveName = 'PupilAdapt2TrialEnd_'; % change prefix based on the period you are interested
 
 %% calculation for fixation windows
 global SCREEN
@@ -50,256 +33,361 @@ SCREEN.screenHeight = 1024; % pixel
 SCREEN.view_distance = 60; % cm
 SCREEN.screenWidth_real = 37.5; % cm
 SCREEN.screenHeight_real = 30; % cm
-pixel_x = tand(fixation_degree) * SCREEN.view_distance / SCREEN.screenWidth_real * SCREEN.screenWidth;
-pixel_y = tand(fixation_degree) * SCREEN.view_distance / SCREEN.screenHeight_real * SCREEN.screenHeight;
+checkWindow_degree = 1.5; % °
+dx = tand(checkWindow_degree) * SCREEN.view_distance / SCREEN.screenWidth_real * SCREEN.screenWidth;
+dy = tand(checkWindow_degree) * SCREEN.view_distance / SCREEN.screenHeight_real * SCREEN.screenHeight;
+view_range = [SCREEN.screenWidth/2-dx SCREEN.screenWidth/2+dx SCREEN.screenHeight/2-dy SCREEN.screenHeight/2+dy];
 
-if pixel_x ~= pixel_y
-    error('可能未用正屏显示器采样，或参数输入错误')
-end
-% view_range = [screenWidth/2-pixel_x screenWidth/2+pixel_x screenHeight/2-pixel_y screenHeight/2+pixel_y];
-
+    
 %% set config for subplots
-set(figure(1),'pos',[27 63 1849 892],'Name','Pupil size');clf;
-subplot1 = tight_subplot(4,4,[0.03 0.03]);
-% set(subplot1,'ytick',[]);
-suptitle('Pupil size');
+set(0,'defaultfigurecolor','w');
+set(figure(1),'pos',[20 20 1849 900],'Name','Pupil size');clf;
+subplot1 = tight_subplot(2,3,[0.1 0.035],[0.1 0.1]);
 
-set(figure(2),'pos',[27 63 1849 892],'Name','Saccade track');clf;
-subplot2 = tight_subplot(4,4,[0.03 0.03]);
-% set(subplot2,'ytick',[]);
-suptitle('Saccade track');
+set(0,'defaultfigurecolor','w');
+set(figure(2),'pos',[20 20 1849 900],'Name','Microsaccade dots');clf;
+subplot2 = tight_subplot(2,3,[0.1 0.035],[0.1 0.1]);
 
-set(figure(3),'pos',[27 63 1849 892],'Name','Saccade rate');clf;
-subplot3 = tight_subplot(4,4,[0.03 0.03]);
-% set(subplot2,'ytick',[]);
-suptitle('Saccade rate');
+set(0,'defaultfigurecolor','w');
+set(figure(3),'pos',[20 20 1849 900],'Name','Microsaccade rate');clf;
+subplot3 = tight_subplot(2,3,[0.1 0.035],[0.1 0.1]);
 
-%% convert EDF files to readable eye data mat files, it may takes a long time
-if skip_files_convert == 0
-    edf2asc_checkasc(data_path,exeFilePath);
-end
-if skip_eyedata_collect == 0
-    getEyeDatas(data_path,error_set,pupil_baseline_duration);
-end
+set(0,'defaultfigurecolor','w');
+set(figure(4),'pos',[20 20 1849 900],'Name','Microsaccade direction');clf;
+subplot4 = tight_subplot(2,3,[0.1 0.035],[0.1 0.1]);
 
-% read the converted mat files
-cd(data_path);
-files = dir('converted_*');
-fileNUM = length(files);
-blinkNUM = NaN(maxtrialNUM,fileNUM);
+for sub = 1:length(subject)
+    data_path = fullfile(file_path,subject{sub});
 
 
-for i = 1 : fileNUM % for each block
-    load(files(i).name)
-    trialInfo = strrep(files(i).name,'converted_','');
-    trialInfo = load(trialInfo);
-
-    pupil_plot_set = nan(length(pupil_eyedata),max(max(cell2mat(cellfun(@size,pupil_eyedata,'UniformOutput',false)))));%生成NaN矩阵(trial数,最多项的列数)
-    plot_x_P = (1: max(cell2mat(cellfun(@size,pupil_eyedata,'UniformOutput',0)))) * dt;%时间轴
-    
-%     trial_choice = trialInfo.choice == 2; % 1:close; 2: far
-%     trial_time = trialInfo.time == 3/2; % 用分数表示
-%     combined_c_t = and(trial_choice,trial_time)
-%     trial_distance = trialInfo.distance == ?; % 用分数表示
-%     trial_velocity = ( trialInfo.distance ./ trialInfo.time == 0.15 ); % 可用小数表示
-    
-    test = cell2mat(pupil_eyedata);
-    if ~isempty(test)
-        figure(50);clf;
-        plot(test(:,4));
-        hold on
-        plot(test(:,2),'r');
-        plot(test(:,3),'g');
+    %% convert EDF files to ASC files, it may takes a long time
+    if edf2asc == 0
+        edf2asc_checkasc(data_path,exeFilePath);
     end
+
+    %% extract eyedata trial by trial from the whole block
+    if data_convert == 0
+        getEyeDatas(data_path,error_set,no_choice_version);
+    end
+
+    % read the converted MAT files
+    cd(data_path)
+    files = dir('converted_*');
+    fileNUM = length(files);
+    blinkNUM = NaN(maxtrialNUM,fileNUM);
+
+    % combine files from different blocks
+    combinedSac = [];
+    combined_dm = [];
+    combinedSC = [];
+    combined_choice = [];
+    combinedSO = [];
+    combinedST = [];
+    combined_head = [];
+    combined_pupil = [];
+    combined_baseline = [];
     
-    %% data pre-processing for pupil data
-    for j = 1 : length(pupil_eyedata) % for each trial
-%     for j = find(trial_choice == 2) % for chosen trial 上面算出来的是逻辑值，所以永远都是取 == 1，只要改前面的参数名。在saccade哪里也要做对应更改
-        trial_Peyedata = pupil_eyedata{j};
-        smooth_level = 1000 / mean(diff(trial_Peyedata(:,1))) / smooth_Hz;
+    for i = 1 : fileNUM % for each block
+        load(files(i).name)
+        trialInfo = strrep(files(i).name,'converted_','');
+        load(trialInfo)
+        combinedSac = [combinedSac;saccade_eyedata];
+        combined_dm = [combined_dm;decision_making];
+        combinedSC = [combinedSC; start_choice];
+        combinedSO = [combinedSO;stimulus_on];
+        combinedST = [combinedST;stimulus_term];
+        combined_choice = [combined_choice;choice'];
+        combined_head = [combined_head;head'];
+        combined_pupil = [combined_pupil;pupil_eyedata];
+        combined_baseline = [combined_baseline;baseline];
+    end
+
+    %%% seperate the trial into different categories
+    trialhead = unique(combined_head);
+    easy_head = trialhead( [1:2 , end-2:end] ); % defind easy trials
+    hard_head = trialhead( length(trialhead) /2 - 1 : length(trialhead) /2 + 2 ); % defind hard trials
+    medium_head = trialhead( ~ismember(trialhead, [easy_head;hard_head] ));
+    
+    % medium_head1 = trialhead(find(trialhead>=91 & trialhead<180));
+    % medium_head2 = trialhead(find(trialhead<=89 & trialhead>0));
+%     medium_head = [medium_head1;medium_head2];
+
+
+    result_temp = [];
+    axes(subplot1(sub));
+    hold on
+    axes(subplot2(sub));
+    hold on
+    axes(subplot3(sub));
+    hold on
+    axes(subplot4(sub));
+    hold on
+
+    for d = 1:3
         
-%         figure(5);clf;
-%         plot(trial_Peyedata(:,4),'b');
-%         hold on
-%         plot(trial_Peyedata(:,2),'r');
-%         plot(trial_Peyedata(:,3),'g');
-                
-        if ~isempty(trial_Peyedata)
-            % check for data validation
-            if sum(isnan(trial_Peyedata(:,2))) > size(trial_Peyedata,1) / 5  % more than 1/5 of data were eliminated
-                disp(['Trial ' num2str(j) ' in ' files(i).name ' skipped.'])
-                continue
-            end
+        if d == 1
+            [Lia,Locb] = ismember(combined_head,hard_head); % for hard tasks
+            colormap = [220 83 86]/255;
+        elseif d==2
+            [Lia,Locb] = ismember(combined_head,easy_head); % for easy tasks
+            colormap = [142 195 167]/255;
         else
-            disp(['Something wrong here, no data for trial ' num2str(j) ' in ' file(i).name ])
+            [Lia,Locb] = ismember(combined_head,medium_head); % for medium difficulty tasks
+            colormap = [240 203 105]/255;
+        end
+        
+        % reset each vaule based on different difficulties
+        saccade_eyedata = combinedSac(Lia,:);
+        decision_making = combined_dm(Lia,:);
+        start_choice = combinedSC(Lia,:);
+        trial_choice = combined_choice(Lia,:);
+        stimulus_on = combinedSO(Lia,:);
+        stimulus_term = combinedST(Lia,:);
+        trial_head = combined_head(Lia,:);
+        pupil_eyedata = combined_pupil(Lia,:);
+        baseline = combined_baseline(Lia,:);
+        
+        pupil_plot_set = nan(length(pupil_eyedata),max(max(cell2mat(cellfun(@size,pupil_eyedata,'UniformOutput',false)))));%生成NaN矩阵(trial数,最多项的列数)
+        plot_x_P = (1: max(cell2mat(cellfun(@size,pupil_eyedata,'UniformOutput',0)))) * dt;%时间轴
+    
+%         % plot for debug
+%         test = cell2mat(pupil_eyedata);
+%         if ~isempty(test)
+%             test_plot = figure(50);
+%             clf(test_plot);
+%             
+%             plot(test(:,4));
+%             hold on
+%             plot(test(:,2),'r');
+%             plot(test(:,3),'g');
+%         end
+    
+        %% data pre-processing for pupil data
+        for j = 1 : sum(Lia) % for each trial
+            trial_Peyedata = pupil_eyedata{j};
+        
+            soIndex = find( trial_Peyedata(:,1) == stimulus_on(j,1),1);
+            stIndex = find( trial_Peyedata(:,1)==stimulus_term(j,1),1);
+            scIndex = find( trial_Peyedata(:,1)==start_choice(j,1),1);
+            dmIndex = find( trial_Peyedata(:,1)==decision_making(j,1),1);
+            
+    %%% select the period of time for analyses       
+%             trial_Peyedata = trial_Peyedata((dcIndex-x):(dcIndex+500),:);
+%             trial_Peyedata = trial_Peyedata((soIndex):(scIndex+500),:);
+            trial_Peyedata = trial_Peyedata((soIndex + 0):(scIndex + 500),:);
+            
+%             % plot for test
+%             figure(5);clf;
+%             plot(trial_Peyedata(:,4),'b');
+%             hold on
+%             plot(trial_Peyedata(:,2),'r');
+%             plot(trial_Peyedata(:,3),'g');
+%             % test end
+            
+            if isempty(trial_Peyedata)      
+                disp(['Something wrong here, no data for trial ' num2str(j) ' in ' files(i).name ])
+                continue
+            else
+                
+                % elimate blink data by NaN value
+                [Peyedataj_purified,~,errorflagj,purifyNUMj] = BlinkNoisePurify_NaN(trial_Peyedata,dt,error_set,4);
+               if isempty(Peyedataj_purified)   
+                fprintf(2,['Trial ' num2str(j) ' in ' files(i).name ' pupil calculation skipped by too much NaN. \n'])
+                continue
+               end
+
+                % check for Nan data
+               if sum(isnan(Peyedataj_purified(:,2))) >= size(Peyedataj_purified,1) / 5
+                    fprintf(2,['Trial ' num2str(j) ' in ' files(i).name ' pupil calculation skipped by too much NaN. \n'])
+                    continue
+               end
+
+                % check for data validation
+                if ~isempty(intersect(errorflagj,error_set))  || purifyNUMj > 3
+                    if intersect(errorflagj,error_set) == 7
+                        fprintf(2,['Trial ' num2str(j) ' in ' files(i).name ' pupil calculation skipped by eye blink. \n'])
+                        continue
+                    else
+                        disp(['Trial ' num2str(j) ' in ' files(i).name ' excluded by error ' num2str(intersect(errorflagj,error_set))])
+                        continue
+                    end
+                end
+            end
+        
+            % prepare for plot
+            if ~isnan(baseline(j))
+    %             pupil_plot_set(j,1:length(trial_Peyedata(:,4))) = smooth(trial_Peyedata(:,4),smooth_level)'-baseline(j);
+                pupil_plot_set(j,1:length(Peyedataj_purified(:,4))) = ( Peyedataj_purified(:,4)'-baseline(j) ) / baseline(j);
+            end         
+        end % trial end
+    
+        %% plot graphs with shaded error bar for pupil size
+
+        if isempty(baseline)
+            disp([subject{sub} ' is skipped.'])
             continue
         end
-         
-%         figure(51);clf;
-%         plot(trial_Peyedata(:,4));
-%         hold on
-%         plot(trial_Peyedata(:,2),'r');
-%         plot(trial_Peyedata(:,3),'g');
-        
-%         trial_Peyedata_a = trial_Peyedata;
-%         trial_Peyedata(:,2) = smoothdata(trial_Peyedata(:,2),'gaussian',5,'includenan');
-%         trial_Peyedata(:,3) = smoothdata(trial_Peyedata(:,3),'gaussian',5,'includenan');
-        
-%         figure(52);clf;
-%         plot(trial_Peyedata_a(:,4));
-%         hold on
-%         plot(trial_Peyedata_a(:,2),'r');
-%         plot(trial_Peyedata_a(:,3),'g');
-%         
-%         test = trial_Peyedata_a(:,2:3) == trial_Peyedata(:,2:3);
-%         find(test == 1)
-%         % count for blink times
-%         [blinkPNUM(j,i),~] = size(blinktimesj); 
-        
-        % prepare for plot
-        if ~isnan(baseline(j))
-%             pupil_plot_set(j,1:length(trial_Peyedata(:,4))) = smooth(trial_Peyedata(:,4),smooth_level)'-baseline(j);
-            pupil_plot_set(j,1:length(trial_Peyedata(:,4))) = ( trial_Peyedata(:,4)'-baseline(j) ) / baseline(j);
-        end         
-    end % trial end
-    
-    %% plot graphs with shaded error bar for pupil size
-    
-    if isempty(baseline)
-        disp([files(i).name ' is skipped.'])
-        continue
-    end
-    
-    axes(subplot1(i));
-    shadedErrorBar(plot_x_P,pupil_plot_set,{@nanmedian,@nanstd},'lineprops', '-b');
-%     shadedErrorBar([],pupil_plot_set,{@nanmedian,@(plot_x_P) nanstd(plot_x_P)*1.96},'lineprops',{'b-'}); %/ sqrt(size(pupil_plot_set,1))*1.96},'lineprops',{'b-'});
-    hold on
+        axes(subplot1(sub));
+        pupil_mean = nanmean(pupil_plot_set,1);
+        pupil_se = nanse(pupil_plot_set,1);
+        shadedErrorBar(plot_x_P,pupil_mean,pupil_se,'lineprops', {'-','color',colormap});
+%         shadedErrorBar(plot_x_P,pupil_plot_set,{@nanmedian,@(plot_x_P)nanstd(plot_x_P)/ sqrt(sum(~isnan(pupil_plot_set(:,1))))},'lineprops', {'-','color',colormap});
 %     yticks('auto');
 %     xticks('auto');
 %     set(subplot1(i),'ytick',[-500 -250 0 250 500 1000],'yticklabel',{'-500','-250','0','250','500','1000'},'ylim',[-750 1000]);
-    set(subplot1(i),'ytick',[-0.25 0 0.25 ],'yticklabel',{'-0.25','0','0.25'},'ylim',[-0.25 0.25]);
-    set(subplot1(i),'xtick',[0 1000 2000 3000 4000],'xticklabel',{'0','1s','2s','3s','4s'})
-    title(subplot1(i),files(i).name);
+        set(subplot1(sub),'ytick',[-0.05 0 0.2],'yticklabel',{'-0.05','0','0.2'},'ylim',[-0.05 0.2]);
+        set(subplot1(sub),'xtick',[0 1000 2000 3000 4000],'xticklabel',{'0','1s','2s','3s','4s'})
+        title(subplot1(sub),subject{sub});
     
-    % save pupil data, saccade data and optic flow duration
-    save([fileSaveName files(i).name],'pupil_plot_set','baseline','trialInfo')
+%         % save pupil data, saccade data and optic flow duration
+%         save([fileSaveName subject],'pupil_plot_set','baseline','trialInfo')
     
-    %% data pre-processing for micro-saccade
-    degree_plot_set = nan(length(saccade_eyedata),max(max(cell2mat(cellfun(@size,saccade_eyedata,'UniformOutput',false)))));
-    plot_x_S = (1: max(cell2mat(cellfun(@size,saccade_eyedata,'UniformOutput',0)))) * dt;
-    
-    microsaddade_pair = cell(length(saccade_eyedata),1);
-    microsaccade_meanV = cell(length(saccade_eyedata),1);
-    microsaccade_meanAMP = cell(length(saccade_eyedata),1);
+        
+        %% data pre-processing for saccade analyses
+        degree_plot_set = nan(length(saccade_eyedata),max(max(cell2mat(cellfun(@size,saccade_eyedata,'UniformOutput',false)))));
+        plot_x_S = (1: max(cell2mat(cellfun(@size,saccade_eyedata,'UniformOutput',0)))) * dt;
 
-    
-    for j = 1 : length(saccade_eyedata) % 可以改为 for j = find(trial_choice == 1) 之类
-%     for j = find(trial_choice == 1)
-        trial_Seyedata = saccade_eyedata{j};
-        smooth_level = 1000 / mean(diff(trial_Seyedata(:,1))) / smooth_Hz;
-        if ~isempty(trial_Seyedata)            
-            % check for data validation
-            if sum(isnan(trial_Seyedata(:,2))) > size(trial_Seyedata,1) / 5
-                disp(['Trial ' num2str(j) ' in ' files(i).name ' skipped.'])
+        Saccade_pair = cell(length(saccade_eyedata),1);
+        saccade_meanV = cell(length(saccade_eyedata),1);
+        saccade_meanAMP = cell(length(saccade_eyedata),1);
+        acceleration_sac_xy = cell(length(saccade_eyedata),1);
+        acceleration_sac = cell(length(saccade_eyedata),1);
+        degrees_sac_xy = cell(length(saccade_eyedata),1);
+        meanCI_S = [];
+
+
+        % microsaccade_rate = zeros(1,(1300+x+1200));
+        microsaccade_trialNUM=0;
+        microsaccade_rate = zeros(1,max(max(cell2mat(cellfun(@size,saccade_eyedata,'UniformOutput',false)))));
+%         microsaccade_rate = zeros(1,1600);
+        
+        for j =1 : sum(Lia)
+            far = 0;
+            near = 0;
+            trial_Seyedata = saccade_eyedata{j};
+            if isempty(saccade_eyedata{j})
+                 disp(['Something wrong here, no data for trial ' num2str(j) ' in ' files(i).name ])
                 continue
             end
-        else
-            disp(['Something wrong here, no data for trial ' num2str(j) ' in ' file(i).name ])
-            continue
-        end
+
+            soIndex = find(trial_Seyedata(:,1)==stimulus_on(j,1),1);
+            stIndex = find(trial_Seyedata(:,1)==stimulus_term(j,1),1);
+            scIndex = find(trial_Seyedata(:,1)==start_choice(j,1),1);
+            dmIndex = find(trial_Seyedata(:,1)==decision_making(j,1),1);
             
-        trial_Seyedata(:,2) = smoothdata(trial_Seyedata(:,2),'gaussian',5,'includenan');
-        trial_Seyedata(:,3) = smoothdata(trial_Seyedata(:,3),'gaussian',5,'includenan');
-        
-        % calculate for microsaccade
-        micro_sac_index = findMicrosaccade(trial_Seyedata);
-        if ~isempty(micro_sac_index)
-            if i == 1
-                micro_pop_set = zeros(1,length(trial_Seyedata)+1000);
-                micro_pop_set(micro_sac_index(:,1)) = 1;
-            else
-                micro_pop_set(micro_sac_index(:,1)) = micro_pop_set(micro_sac_index(:,1)) + 1;
-            end
-        end
-        if ~isempty(micro_sac_index)
-            for k = 1:size(micro_sac_index,1)
-                axes(subplot2(i));
-                hold on
-                plot(trial_Seyedata(micro_sac_index(k,1):micro_sac_index(k,2),2),trial_Seyedata(micro_sac_index(k,1):micro_sac_index(k,2),3),'color',[0.8/k 0.8/j 0.8]);
-            end
-        end
-    end
-    axes(subplot2(i));
-    hold on
-    plot(SCREEN.screenWidth/2,SCREEN.screenHeight/2,'g*')
-    view_window = 200;
-    set(subplot2(i),'ylim',[SCREEN.screenHeight/2 - view_window , SCREEN.screenHeight/2 + view_window],'xlim',[SCREEN.screenWidth/2 - view_window,  SCREEN.screenWidth/2 + view_window]); 
-
-    % 画1°的圆
-    circle_r1 = calculate_r(1); 
-    plot_circle(SCREEN.screenWidth/2,SCREEN.screenHeight/2,circle_r1,[0 0 0],subplot2(i))
-
-    % 画3°的圆
-    circle_r2 = calculate_r(3);
-    plot_circle(SCREEN.screenWidth/2,SCREEN.screenHeight/2,circle_r2,[0.5 0.5 0.5],subplot2(i))
-    title(subplot2(i),files(i).name);
-        
-        
-    %% data pre-processing for saccade
-    degree_plot_set = nan(length(saccade_eyedata),max(max(cell2mat(cellfun(@size,saccade_eyedata,'UniformOutput',false)))));
-    plot_x_S = (1: max(cell2mat(cellfun(@size,saccade_eyedata,'UniformOutput',0)))) * dt;
-    
-    microsaddade_pair = cell(length(saccade_eyedata),1);
-    microsaccade_meanV = cell(length(saccade_eyedata),1);
-    microsaccade_meanAMP = cell(length(saccade_eyedata),1);
-    
-    for j = 1 : length(saccade_eyedata)
-        trial_Seyedata = saccade_eyedata{j};
-        smooth_level = 1000 / mean(diff(trial_Seyedata(:,1))) / smooth_Hz;
-        if ~isempty(trial_Seyedata)            
-            % check for data validation
-            if sum(isnan(trial_Seyedata(:,2))) > size(trial_Seyedata,1) / 5
-                disp(['Trial ' num2str(j) ' in ' files(i).name ' skipped.'])
+    %%% select the period of time for analyses       
+%             trial_Seyedata = trial_Seyedata((dcIndex-x):(dcIndex+500),:);
+            trial_Seyedata = trial_Seyedata((soIndex):(scIndex+500),:);
+%             trial_Seyedata = trial_Seyedata((soIndex):(dmIndex),:);
+%             trial_Seyedata = trial_Seyedata((dmIndex-1500):(dmIndex+10),:);
+            
+%             % plot for test
+%             figure(6);clf;
+%             plot(trial_Seyedata(:,4),'b');
+%             hold on
+%             plot(trial_Seyedata(:,2),'r');
+%             plot(trial_Seyedata(:,3),'g');
+%             % test end
+            
+            if isempty(trial_Seyedata)      
+                disp(['Something wrong here, no data for trial ' num2str(j) ' in ' files(i).name ])
                 continue
-            end
-        else
-            disp(['Something wrong here, no data for trial ' num2str(j) ' in ' file(i).name ])
-            continue
-        end
-        
-        % count for blink times
-%         [blinkSNUM(j,i),~] = size(blinktimesj);
-        
-        % check for view window validation
-%         del_index = or(or(or(Seyedataj_purified(:,2) < view_range(1) , Seyedataj_purified(:,2) > view_range(2) ),Seyedataj_purified(:,3) < view_range(3)),Seyedataj_purified(:,3) > view_range(4));
-%         Seyedataj_purified(del_index,2:4) = NaN;
-        
-        % convert x-y pixel data to degree/s
-        degree_saccade = pixel2degreev(trial_Seyedata,1,2,3);
-        
-        % prepare for plot
-        degree_plot_set(j,1:length(trial_Seyedata(:,4))) = smooth(degree_saccade(:,2),smooth_level)';
-        
-        % calculate for saccade
-        [microsaddade_pair{j},microsaccade_meanV{j},microsaccade_meanAMP{j}] = findSaccade(degree_saccade,saccade_thres,saccade_thres_cap);
-    end
-    
-    axes(subplot3(i));
-%     shadedErrorBar(plot_x_S,degree_plot_set,{@nanmean,@nanstd},'lineprops', '-b');
-%     shadedErrorBar([],degree_plot_set,{@nanmedian,@(plot_x_S) nanstd(plot_x_S) / sqrt(size(degree_plot_set,1))*1.96},'lineprops',{'b-'});
-%     hold on
-%     set(subplot2(i),'ytick',[]);
+            else
+                
+                % elimate blink data by NaN value
+                [Seyedataj_purified,~,errorflagj,purifyNUMj] = BlinkNoisePurify_NaN(trial_Seyedata,dt,error_set,4);
+               if isempty(Seyedataj_purified)   
+                fprintf(2,['Trial ' num2str(j) ' in ' files(i).name ' saccade calculation skipped by too much NaN. \n'])
+                continue
+               end
 
+                % check for Nan data
+               if sum(isnan(Seyedataj_purified(:,2))) >= size(Seyedataj_purified,1) / 5
+                    fprintf(2,['Trial ' num2str(j) ' in ' files(i).name ' saccade calculation skipped by too much NaN. \n'])
+                    continue
+               end
+
+                % check for data validation
+                if ~isempty(intersect(errorflagj,error_set))  || purifyNUMj > 3
+                    if intersect(errorflagj,error_set) == 7
+                        fprintf(2,['Trial ' num2str(j) ' in ' files(i).name ' saccade calculation skipped by eye blink. \n'])
+                        continue
+                    else
+                        disp(['Trial ' num2str(j) ' in ' files(i).name ' excluded by error ' num2str(intersect(errorflagj,error_set))])
+                        continue
+                    end
+                end
+            end
+
+            % convert x-y pixel data to degree/s
+            degree_saccade = pixel2degreexy(Seyedataj_purified,1,2,3); % convert x-y pixel data to linear velocity data
+
+            % detection micro-saccade
+            microSaccade_index = findMicrosaccade_ellipse(degree_saccade);
+            
+            % 每个microsaccade起止时序
+            if ~isempty(microSaccade_index)
+                plot(subplot2(sub),microSaccade_index(:,1), ones(length(microSaccade_index(:,1)),1)*5+j,'.k');
+                set(subplot2(sub),'YTickLabelMode','auto','XTickLabelMode','auto');
+                title(subplot2(sub),subject{sub});
+                microsaccade_rate(1,microSaccade_index(:,1)) = microsaccade_rate(1,microSaccade_index(:,1))+1;
+                microsaccade_trialNUM = microsaccade_trialNUM+1;
+            end
+            
+            if ~isempty(microSaccade_index)
+                for k = 1:size(microSaccade_index,1)
+                    microsac_eyedata = degree_saccade(microSaccade_index(k,1):microSaccade_index(k,2),2:3);
+                    micro_center = ( degree_saccade(microSaccade_index(k,1),2:3) + degree_saccade(microSaccade_index(k,2),2:3) ) / 2;
+                    delv2c = sqrt(power(microsac_eyedata(:,1) - micro_center(1) , 2) + power(microsac_eyedata(:,2) - micro_center(2) , 2));
+                    max_ampNUM = find(delv2c == max(delv2c),1);
+
+    %           figure(120) % plot for debug
+    %           plot(microsac_eyedata(:,1),microsac_eyedata(:,2));
+    %           hold on
+    %           plot(microsac_eyedata(max_ampNUM,1),microsac_eyedata(max_ampNUM,2),'r*');
+    %           plot(micro_center(1),micro_center(2),'g*');
     
-%     figure(10);clf
-    micro_pop = microsaccade_rate_cal(micro_pop_set,50,10);
-    plot(micro_pop(:,1)*10,micro_pop(:,2),'k');
-%     title('Microsaccade rate')
-    title(subplot3(i),files(i).name);  
+                % if k == size(microSaccade_index,1)%the last microsaccade
+                    if microsac_eyedata(max_ampNUM,1) > micro_center(1)
+                            far = far+1;   
+                    else
+                            near = near+1;
+                    end
+        % end
+                 end
+            end
+    %         result_temp = [result_temp;far near trial_head(j) trial_choice(j) d];
+        end
+
+
+        micro_rate_plot = microsaccade_rate_cal(microsaccade_rate,micro_rate_bin_width,micro_rate_step_length/dt,microsaccade_trialNUM);
+
+        hold on
+        plot(subplot3(sub),(micro_rate_plot(:,1)*micro_rate_step_length*dt),micro_rate_plot(:,2),'color',colormap,'LineWidth',0.8);
+%         plot(subplot3(sub),[1500 1500],[0 ceil(max(micro_rate_plot(:,2))/2)*2],'b','LineWidth',1);
+    %     plot(subplot3(sub),[(1300+TIME(t)*1000) (1300+TIME(t)*1000)],[0 ceil(max(micro_rate_plot(:,2))/2)*2],'b','LineWidth',1);
+        set(subplot3(sub),'YTickLabel',[0:0.5:ceil(max(micro_rate_plot(:,2))/2)*2],'YTick',[0:0.5:ceil(max(micro_rate_plot(:,2))/2)*2],'YLim',[0 ceil(max(micro_rate_plot(:,2))/2)*2]);
+%         set(subplot3(sub),'XTick',[0:500:2000],'XTickLabel',[-1500:500:500]);
+        set(subplot3(sub),'XTick',[0:1000:4000],'XTickLabel',{'1s','2s','3s','4s'});
+    %      set(subplot3(f),'XTickLabelMode','auto','YTickLabelMode','auto');
+        xlabel('time (ms)');
+        ylabel('microsaccade rate (Hz)');
+        set(subplot3(sub),'LineWidth',1);
+
+        clear eyedata startTime endTime choice distance head time pupil_plot_set degree_plot_set plot_x
+
+
+
+    end
+    saveas(3,'4.tif');
     
-    clear eyedata startTime endTime trialInfo pupil_plot_set degree_plot_set plot_x
+    % csvwrite('microsaccade_direction6.csv',result_temp);
 end
+
 end
+
+
+
 
 function [] = plot_circle( circle_x,circle_y,circle_r,circle_color,figure_handle)
 theta = 0:0.1:2*pi;
@@ -316,17 +404,12 @@ global SCREEN
 circle_r = tand(circle_degree) * SCREEN.view_distance * SCREEN.screenWidth / SCREEN.screenWidth_real;
 end
 
-function micro_rate = microsaccade_rate_cal(microNUM,bin_width,step_length)
-micro_rate = [];
-for i = 1: floor(length(microNUM) / step_length ) - ceil(bin_width / step_length)
-    if  i == 1
-        micro_rate = cat(1,micro_rate,[i nansum(microNUM(1:bin_width)) / bin_width]);
-    else
-        micro_rate = cat(1,micro_rate,[i nansum(microNUM( step_length*i : step_length*i + bin_width )) / bin_width]);
-    end
+function data_out = nanse(import,direction)
+if direction == 1
+    data_out = nanstd(import,direction) ./ sqrt(sum(~isnan(import(:,1))));
+elseif direction == 2
+    data_out = nanstd(import,direction) ./ sqrt(sum(~isnan(import(1,:))));
+else
+    error('invalid value of direction')
 end
-end
-
-function y =nanse(input)
-y=nanstd(input)*1.96/sqrt(sum(~isnan(input)));
 end

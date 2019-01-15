@@ -3,11 +3,17 @@ function [saccade_pair,saccade_meanV,mean_amplitude] = findSaccade(degree_data,s
 
 sac_bin = find(degree_data(:,2) >= saccade_thres);
 sac_bin_r = rot90(sac_bin,2);
-
-sac_pair = sac_bin(diff(sac_bin) ~= 1);
-sac_pair = cat(1,sac_pair,sac_bin_r(diff(sac_bin_r) ~= -1 ));
-sac_pair = cat(1,sac_pair,sac_bin(1));
-sac_pair = sort(sac_pair);
+if ~isempty(sac_bin)
+    sac_pair = sac_bin(diff(sac_bin) ~= 1);
+    sac_pair = cat(1,sac_pair,sac_bin_r(diff(sac_bin_r) ~= -1 ));
+    sac_pair = cat(1,sac_pair,sac_bin(1));
+    sac_pair = sort(sac_pair);
+else
+    saccade_pair = [];
+    saccade_meanV = [];
+    mean_amplitude = [];
+    return
+end
 
 saccade_pair = [];
 mean_index = [];
@@ -24,7 +30,7 @@ if exist('saccade_cap','var')
 end
 
 for i = 1 : length(sac_pair) - 1
-    if all(degree_data(sac_pair(i):sac_pair(i+1),2) > saccade_thres) && sac_pair(i+1) - sac_pair(i) > 4 % saccade maintained for at least 4ms
+    if all(degree_data(sac_pair(i):sac_pair(i+1),2) > saccade_thres) && sac_pair(i+1) - sac_pair(i) > 8 % saccade maintained for at least 4ms
         saccade_pair = cat(1,saccade_pair,[ degree_data(sac_pair(i),1) degree_data(sac_pair(i+1),1) ] );
         amplitude = cat(1,amplitude,sum( degree_data(sac_pair(i):sac_pair(i+1),2) ));
         mean_index = cat(1,mean_index,[sac_pair(i):sac_pair(i+1)]');

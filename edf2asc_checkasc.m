@@ -1,35 +1,32 @@
 function edf2asc_checkasc(dataPath,exeFilePath)
 % This script can convert .EDF files to .asc files.
 % The processing might need a period of time. If you have a significant
-% number of files need processing, please well arrange your time 
+% number of files need to processing, please well arrange your time 
 % before running this script.
 %
 % By BYC 2018-10-8
 
 if ~exist('dataPath','var')
-    error('Please input a data path.');
+    error('There is no file in this path or there is a wrong path.');
 end
 
 if ~exist('exeFilePath','var')
-    error('Please input the path for edf2asc.exe.');
-% elseif strfind(exeFilePath,'edf2asc.exe')
-%     exeFileName = [exeFilePath ' -ntime_check'];
+    error('There is no file in this path or there is a wrong path.');
+elseif strfind(exeFilePath,'edf2asc.exe')
+    exeFileName = [exeFilePath ' -ntime_check'];
 else
-    exeFileName = [fullfile(exeFilePath,'edf2asc.exe') ' -ntime_check -y -vel -miss 0 -failsafe'];
+    exeFileName = [fullfile(exeFilePath,'edf2asc.exe') ' -ntime_check'];
 end
 
 cd (dataPath);
-datasfile1= dir([dataPath '\*.EDF']);
-datasfile2 = dir([dataPath '\*.edf']);
-
-if length(datasfile1) > length(datasfile2)
-    datasfile = datasfile1;
-else
-    datasfile = datasfile2;
-end
-
+datasfile= dir([dataPath '\*.EDF']);
 datasNum = length(datasfile);
 status=[];
+check_operation = 0; % how to deal the existed asc files? 1. overwrite; 0. skip. You could set 0 after the second process.
+
+if check_operation == 1
+    delete *.asc
+end
 
 for i = 1: datasNum
 
@@ -41,10 +38,18 @@ for i = 1: datasNum
        else
            error([datasfile(i).name ' is not a EDF file']);
        end
+       
+       if check_operation == 0
+           check_result = fopen(check_ascName);
+           if check_result > 0
+               status = cat(1,status, [-1 i]);
+               continue
+           end
+       end
            
        cmd = [exeFileName 32 oldFileName];
        [~, cmdout]= system(cmd);
-       status = cat(1,status, [strfind(cmdout,'success') i]);
+       status = cat(1,status, [contains(cmdout,'success') i]);
 end
 
 % %% reverse for the error report

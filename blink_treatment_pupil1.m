@@ -19,6 +19,7 @@ error_8 = 8; % 8. have a minimum of pupil size & blink detected;
 error_9 = 9; % 9. Still have unknow rifts in x and y pixel, that should be caused by not rigorous operation or other unknown conditions.
 error_10=10; % 10.Still lots of points outside the screen. It may be caused by no correctly calibration & validation, or may be the subject squinting for too long (>1s)
 error_11=11; % 11.Still have unknown noisy point (sudden decrease to zero for ~1 to 20ms, discontinuously), this maybe caused by Eyelink.
+error_12=12; % 12.Input data too short
 
 pupildata = eyedata(:,pupilcol);
 x_col = 2;
@@ -27,7 +28,7 @@ y_col = 3;
 global SCREEN; % global screen in weight, height, distance, smooth
 
 if ~exist('SCREEN.smooth','var')
-    SCREEN.smooth = 40/dt;
+    SCREEN.smooth = 40;
 end
 
 if ~exist('SCREEN.width','var')
@@ -42,36 +43,75 @@ resultFlag = [];
 onset_set=[];
 term_set=[];
 blink_time = [];
-mean_pupil = mean(pupildata);
-std_pupil = std(pupildata);
-time_adding_onset = 100; % eliminate 100 ms more before blink onset
-time_adding_term = 100; % eliminate 100 ms more after blink termination
+mean_pupil = nanmean(pupildata);
+std_pupil = nanstd_median(pupildata);
+time_adding_onset = 150; % eliminate 100 ms more before blink onset
+time_adding_term = 150; % eliminate 100 ms more after blink termination
 
 if mean_pupil <= 1000 % reference needed for the pupil size under light versus a strict darkness room
-    resultFlag = cat(1,resultFlag,error_1);
+    resultFlag = cat(1,resultFlag,error_1); % this value only refer to ~60 cm as head to screen distance.
 end
 
 %% calculate the smoothed clopes
+
+onset_set = zeros(length(pupildata),1);
+
 for i = 1 : length(pupildata)
-    if i <= SCREEN.smooth || i> (length(pupildata)-SCREEN.smooth)
-        onseti = NaN;
-        termi = NaN;
+    if i == 1 || i == length(pupildata)
+        onset_set(i,:) = 0;
+    elseif i == 2 || i == length(pupildata) - 1
+        onset_set(i) = (pupildata(i-1) - pupildata(i+1)) / 2;
+    elseif i == 3 || i == length(pupildata) - 2
+        onset_set(i) = (pupildata(i-2) + pupildata(i-1) - pupildata(i+1) - pupildata(i+2)) / 6;
     else
-        onseti = (pupildata(i) - pupildata(i+SCREEN.smooth)) / SCREEN.smooth;
-        termi = (pupildata(i) - pupildata(i-SCREEN.smooth)) / SCREEN.smooth;
+        onset_set(i) = (pupildata(i-3) + pupildata(i-2) + pupildata(i-1) - pupildata(i+1) - pupildata(i+2) - pupildata(i+3)) / 12;
+%     else
+%         onset_set(i,:) = (eyedata(i+4,[col_x,col_y]) + eyedata(i+3,[col_x,col_y]) + eyedata(i+2,[col_x,col_y]) + eyedata(i+1,[col_x,col_y]) - eyedata(i-1,[col_x,col_y]) - eyedata(i-2,[col_x,col_y]) - eyedata(i-3,[col_x,col_y]) - eyedata(i-4,[col_x,col_y])) / 20;
     end
-    onset_set = cat(1,onset_set,onseti);
-    term_set = cat(1,term_set,termi);
+end
+term_set = rot90(-onset_set,2);
+
+
+% for i = 1 : length(pupildata)
+%     if i <= SCREEN.smooth || i> (length(pupildata)-SCREEN.smooth)
+%         onseti = NaN;
+%         termi = NaN;
+%     else
+%         onseti = (pupildata(i) - pupildata(i+SCREEN.smooth)) / SCREEN.smooth;
+%         termi = (pupildata(i) - pupildata(i-SCREEN.smooth)) / SCREEN.smooth;
+%     end
+%     onset_set = cat(1,onset_set,onseti);
+%     term_set = cat(1,term_set,termi);
+% end
+% term_set = rot90(term_set,2);
+% 
+% figure(2000);clf
+% plot(term_set,'c')
+% hold on
+% plot(onset_set,'k')
+% plot(eyedata(:,2),'r')
+% plot(eyedata(:,3),'g')
+% plot(eyedata(:,4),'b')
+
+% check for length of data
+if length(onset_set) <= 50
+    blink_time_data = [];
+    blink_time = [];
+    resultFlag = cat(1,resultFlag,error_12);
+    return
 end
 
-% try to find the blink point every 95ms,
-[~,index_onset] = findpeaks(onset_set,'minPeakHeight',max(std_pupil/SCREEN.smooth,10),'minPeakDistance',80/dt);
-[~,index_term_r] = findpeaks(rot90(term_set,2),'minPeakHeight',max(std_pupil/SCREEN.smooth,10),'minPeakDistance',80/dt);
+peak_thres = nanstd_median(onset_set);
+
+% try to find the blink point every 50ms,
+% [~,index_onset] = findpeaks(onset_set,'minPeakHeight',max(std_pupil/SCREEN.smooth,20),'minPeakDistance',50/dt);
+% [~,index_term_r] = findpeaks(term_set,'minPeakHeight',max(std_pupil/SCREEN.smooth,20),'minPeakDistance',50/dt);
+[~,index_onset] = findpeaks(onset_set,'minPeakHeight',peak_thres*5,'minPeakDistance',50/dt);
+[~,index_term_r] = findpeaks(term_set,'minPeakHeight',peak_thres*5,'minPeakDistance',50/dt);
 index_term = rot90((length(term_set)-index_term_r),2);
 % pks_term = rot90(pks_term_r,2);
 
 %% chack for error and validation
-
 if ~isempty(index_onset) && ~isempty(index_term)
 % check for 3 and mark in resultFlag: eye closeing in recording start;
     if sum(pupildata(1:min(index_term)) == 0) ~= 0 || min(index_term) <= time_adding_term
@@ -194,10 +234,11 @@ if ~isempty(index_onset) && ~isempty(index_term)
 elseif isempty(index_term) && ~isempty(index_onset)
     if sum(pupildata(max(index_onset):end)==0) > 0
         resultFlag = cat(1,resultFlag,error_2); % 2. eye closeing in end;
+        index_onset = index_onset - time_adding_onset;
         blink_index_pre =  (max(index_onset) : length(pupildata))';
         blink_pair = [max(index_onset) length(pupildata)];
     elseif sum(diff(pupildata(max(index_onset) : end)) > 0) == 0
-        blink_index_pre = (max(index_onset) : length(pupildata))';
+        blink_index_pre = (max(index_onset) - time_adding_onset : length(pupildata))';
         blink_pair = [];
         resultFlag = cat(1,resultFlag,error_2);
     else
@@ -208,10 +249,11 @@ elseif isempty(index_term) && ~isempty(index_onset)
 elseif isempty(index_onset) && ~isempty(index_term)
     if sum(pupildata(1:min(index_term))==0) > 0
         resultFlag = cat(1,resultFlag,error_3); % 3. eye closeing in recording start;
+        index_term = index_term + time_adding_term;
         blink_index_pre = (1:min(index_term))';
         blink_pair = [1 min(index_term)];
     elseif sum(diff(pupildata(1 : min(index_term))) < 0) == 0
-        blink_index_pre = (1 : min(index_term))';
+        blink_index_pre = (1 : min(index_term) + time_adding_term)';
         resultFlag = cat(1,resultFlag,error_3);
         blink_pair = [];
     else
@@ -268,28 +310,34 @@ end
 if length(treated_index) <= length(pupildata) / 5 * 4
     resultFlag = cat(1,resultFlag,error_7);
 end
-        
-% %% plot for test
-% figure(NUM); clf; set(gcf,'color','white');
-% plot(pupildata);
-% hold on;
-% plot(onset_set,'r-');
-% plot(term_set,'g-');
-% plot(eyedata(:,2),'r');
-% plot(eyedata(:,3),'g')
-% plot(eyedata(:,4),'b');
-% if ~isempty(blink_pair)
-%     plot(blink_pair(:,1),pupildata(blink_pair(:,1)),'ro');
-%     plot(blink_pair(:,2),pupildata(blink_pair(:,2)),'go');
-%     ylim([-200,inf]);
-% %     title(NUM);
-%     plot(blink_index,ones(size(blink_index))*(-100),'r.');
+
+
+% if sum(ismember(resultFlag,10))
+%     %% plot for test
+%     figure(2500); clf; set(gcf,'color','white');
+%     plot(pupildata);
+%     hold on;
+%     plot(onset_set,'r-');
+%     plot(term_set,'g-');
+%     plot(eyedata(:,2),'r');
+%     plot(eyedata(:,3),'g')
+%     plot(eyedata(:,4),'b');
+%     if ~isempty(blink_pair)
+%         plot(blink_pair(:,1),pupildata(blink_pair(:,1)),'ro');
+%         plot(blink_pair(:,2),pupildata(blink_pair(:,2)),'go');
+%         ylim([-200,inf]);
+%     %     title(NUM);
+%         plot(blink_index,ones(size(blink_index))*(-100),'r.');
+%     end
+%     plot(treated_index,ones(size(treated_index))*(-120),'k.');
+%     % plot(blink_index,ones(size(blink_index)),'bs');
+%     % plot(treated_index,ones(size(treated_index)),'ks');
+%     hold off
+%     % test end
 % end
-% plot(treated_index,ones(size(treated_index))*(-120),'k.');
-% % plot(blink_index,ones(size(blink_index)),'bs');
-% % plot(treated_index,ones(size(treated_index)),'ks');
-% hold off
-% % test end
 end
 
+function output = nanstd_median(input)
+output = sqrt( nansum( power( abs(input - median(input,'omitnan')),2 )) / (sum(~isnan(input))-1) );
+end
     
