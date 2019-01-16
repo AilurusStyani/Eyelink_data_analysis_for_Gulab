@@ -1,7 +1,7 @@
 % function saccade_index = findMicrosaccade(eyedata)
 function valid_microsac = findMicrosaccade_ellipse(eyedata)
 % col: 1 time; 2 velocity; 3 x pixel; 4 y pixel;5 pupil size
-max_degree = 2; % set the maximum degree for the microsaccade
+max_degree = 1.5; % set the maximum degree for the microsaccade
 microsaccade_interval = 20; % ms
 dt = mode(diff(eyedata(:,1))) ./ 1000;
 % saccade_index = [];
