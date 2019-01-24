@@ -5,10 +5,17 @@ max_degree = 1.5; % set the maximum degree for the microsaccade
 microsaccade_interval = 20; % ms
 dt = mode(diff(eyedata(:,1))) ./ 1000;
 % saccade_index = [];
-valid_microsac = [];
-%% calculate for 5 * SD (median)
-thres_x = nanstd_median(eyedata(:,2)) * 5;
-thres_y = nanstd_median(eyedata(:,3)) * 5;
+valid_on = [];
+valid_term = [];
+
+%% calculate for 5 * SD (median) of data in Confidence interval
+% thres_x = max(nanstd_median(eyedata(:,2)),5) * 3;
+% thres_y = max(nanstd_median(eyedata(:,3)),5) * 3;
+
+[TF_X,~,thres_x2,~] = isoutlier(eyedata(:,2),'median');
+[TF_Y,~,thres_y2,~] = isoutlier(eyedata(:,3),'median');
+thres_x = thres_x2 * 5 / 3;
+thres_y = thres_y2 * 5 / 3;
 
 index =  power(eyedata(:,2),2) ./ thres_x^2 + power(eyedata(:,3),2) ./ thres_y^2 > 1;
 sac_on = find(diff(index) == 1);
@@ -28,49 +35,61 @@ end
 sac_on_index(sac_on_index == 0) = [];
 sac_on = sac_on_index;
 
-sac_del_index = [];
+over_shoot = [];
 for i = 2:length(sac_on)
     if sac_on(i) < sac_term(i-1) + microsaccade_interval
-        sac_del_index = cat(1,sac_del_index,i);
+        over_shoot = cat(1,over_shoot,[i-1,i]);
     end
 end
 
-sac_on(sac_del_index) = [];
-sac_term(sac_del_index - 1) =[];
-
-% figure(52);clf;
-% plot(eyedata(:,2));
-% hold on
-% plot([0 size(eyedata,1)], [(std_median(eyedata(:,2)) * 1.5),(std_median(eyedata(:,2)) * 1.5)],'r');
-
 %% calculate for amplitude and check for 6ms as minimum duration
+sac_index = [];
 for i = 1:length(sac_on)
     if sac_term(i) - sac_on(i) >= 6
         degree = pixel2deg(eyedata(sac_on(i):sac_term(i),4:5),dt);
-        if degree <= max_degree
-            valid_microsac = cat(1,valid_microsac,[sac_on(i), sac_term(i)]);
+        if degree > max_degree
+            sac_index = cat(1,sac_index,i);
+        else
+            valid_on = cat(1,valid_on,[sac_on(i),i]);
+            valid_term = cat(1,valid_term,[sac_term(i),i]);
         end  
     end
 end
-%% check for 8 ms as minimum duration
-% if length(sac_on) >= length(sac_term)
-%     for i = 1:length(sac_term)
-%         if (sac_term(i) - sac_on(find(sac_on < sac_term(i),1,'last'))) * dt > 8
-%             if nansum(eyedata(sac_on(find(sac_on < sac_term(i),1,'last')):sac_term(i),2))/1000 < max_degree
-%                 saccade_index = cat(1,saccade_index,[sac_on(find(sac_on < sac_term(i),1,'last')) sac_term(i)]);
-%             end
-%         end
-%     end
-% elseif length(sac_on) < l
-%     ength(sac_term)
-%     for i = 1 : length(sac_on)
-%         if (sac_term(find(sac_term > sac_on(i),1))) * dt > 8
-%             if nansum(eyedata(sac_on(i):sac_term(find(sac_term > sac_on(i),1)),2))/1000 < max_degree
-%                 saccade_index = cat(1,saccade_index,[sac_on(i) sac_term(find(sac_term > sac_on(i),1))]);
-%             end
-%         end
-%     end
-% end
+
+if ~isempty(over_shoot) && ~isempty(valid_on)
+    add_delet = ismember(over_shoot(:,1), sac_index);
+    sac_index = [sac_index;over_shoot(add_delet,2)];
+    delet_mic = ismember(valid_on(:,2),sac_index);
+    delet_mic = find(delet_mic == 1);
+    valid_on(delet_mic,:) = [];
+    valid_term(delet_mic,:) = [];
+
+    index_on_over = valid_on(ismember(valid_on(:,2),over_shoot(:,1)),2);
+    index_term_over = valid_term(ismember(valid_term(:,2),over_shoot(:,2)),2);
+    overshoot_del_index = index_on_over(ismember(index_on_over+1 , index_term_over));
+
+    valid_on(ismember(valid_on(:,2),(overshoot_del_index+1)),:) = [];
+    valid_term(ismember(valid_term(:,2),overshoot_del_index),:) = [];
+end
+
+if ~isempty(valid_on)
+    valid_microsac = [valid_on(:,1) valid_term(:,1)];
+else
+    valid_microsac = [];
+end
+
+% figure(52);clf;
+% plot(eyedata(:,2),'b');
+% hold on
+% plot(eyedata(:,3),'r');
+% % plot(TF_X*500,'sb');
+% % plot(TF_Y*510,'sg')
+% plot([0 size(eyedata,1)], [thres_x,thres_x],'b');
+% plot([0 size(eyedata,1)], [thres_y,thres_y],'g');
+% plot([0 size(eyedata,1)], [-thres_x,-thres_x],'--b');
+% plot([0 size(eyedata,1)], [-thres_y,-thres_y],'--g');
+% plot(valid_microsac(:,1),eyedata(valid_microsac(:,1),2),'*b');
+% plot(valid_microsac(:,2),eyedata(valid_microsac(:,2),2),'*g');
 end
 
 function output = nanstd_median(input)
@@ -111,6 +130,7 @@ elseif exist('SCREEN.viewdistance','var')
 else
     view_dis = SCREEN.distance;
 end
+
 smooth_x = eyedata(:,1);
 smooth_y = eyedata(:,2);
 
