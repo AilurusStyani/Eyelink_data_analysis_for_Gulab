@@ -12,9 +12,9 @@ valid_term = [];
 % thres_x = max(nanstd_median(eyedata(:,2)),5) * 3;
 % thres_y = max(nanstd_median(eyedata(:,3)),5) * 3;
 
-[TF_X,~,thres_x2,~] = isoutlier(eyedata(:,2),'median');
+[TF_X,~,thres_x2,~] = isoutlier(eyedata(:,2),'median'); % this function employ 3 * SD as threshold
 [TF_Y,~,thres_y2,~] = isoutlier(eyedata(:,3),'median');
-thres_x = thres_x2 * 5 / 3;
+thres_x = thres_x2 * 5 / 3; % we use 5 * SD as threshold to detect saccade / micro-saccade
 thres_y = thres_y2 * 5 / 3;
 
 index =  power(eyedata(:,2),2) ./ thres_x^2 + power(eyedata(:,3),2) ./ thres_y^2 > 1;
