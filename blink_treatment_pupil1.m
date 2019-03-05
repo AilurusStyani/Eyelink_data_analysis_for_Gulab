@@ -225,12 +225,12 @@ if ~isempty(index_onset) && ~isempty(index_term)
 elseif isempty(index_term) && ~isempty(index_onset)
     if sum(pupildata(max(index_onset):end)==0) > 0
         resultFlag = cat(1,resultFlag,error_2); % 2. eye closeing in end;
-        index_onset = index_onset - time_adding_onset;
+        index_onset = max(index_onset - time_adding_onset,1);
         blink_index_pre =  (max(index_onset) : length(pupildata))';
         blink_pair = [max(index_onset) length(pupildata)];
     elseif sum(diff(pupildata(max(index_onset) : end)) > 0) == 0
         blink_index_pre = (max(index_onset) - time_adding_onset : length(pupildata))';
-        index_onset = index_onset - time_adding_onset;
+        index_onset = max(index_onset - time_adding_onset,1);
         blink_index_pre =  (max(index_onset) : length(pupildata))';
         blink_pair = [max(index_onset) length(pupildata)];
         resultFlag = cat(1,resultFlag,error_2);
@@ -242,12 +242,11 @@ elseif isempty(index_term) && ~isempty(index_onset)
 elseif isempty(index_onset) && ~isempty(index_term)
     if sum(pupildata(1:min(index_term))==0) > 0
         resultFlag = cat(1,resultFlag,error_3); % 3. eye closeing in recording start;
-        index_term = index_term + time_adding_term;
+        index_term = min(index_term + time_adding_term,length(pupildata));
         blink_index_pre = (1:min(index_term))';
         blink_pair = [1 min(index_term)];
     elseif sum(diff(pupildata(1 : min(index_term))) < 0) == 0
-        blink_index_pre = (1 : min(index_term) + time_adding_term)';
-        index_term = index_term + time_adding_term;
+        index_term = min(index_term + time_adding_term,length(pupildata));
         resultFlag = cat(1,resultFlag,error_3);
         blink_index_pre = (1:min(index_term))';
         blink_pair = [1 min(index_term)];
