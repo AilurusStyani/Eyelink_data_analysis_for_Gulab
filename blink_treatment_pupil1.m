@@ -50,7 +50,7 @@ end
 
 % remove noise which sudden to 0 in 1 ms
 for i = 3:length(pupildata)-2
-    outlier_check = isoutlier(pupildata(i-2:i+2));
+    outlier_check = isoutlier(pupildata(i-2:i+2),'mean');
     if outlier_check(3) == 1
         pupildata(i) = (pupildata(i-2) + 2*pupildata(i-1) + 2*pupildata(i+1) + pupildata(i+2)) / 6;
         resultFlag = cat(1,resultFlag,error_11);
